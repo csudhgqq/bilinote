@@ -16,9 +16,9 @@ from app.downloaders.douyin_downloader import DouyinDownloader
 from app.downloaders.local_downloader import LocalDownloader
 from app.downloaders.youtube_downloader import YoutubeDownloader
 from app.db.video_task_dao import delete_task_by_video, insert_video_task
-from app.enmus.exception import NoteErrorEnum, ProviderErrorEnum
-from app.enmus.task_status_enums import TaskStatus
-from app.enmus.note_enums import DownloadQuality
+from app.enums.exception import NoteErrorEnum, ProviderErrorEnum
+from app.enums.task_status_enums import TaskStatus
+from app.enums.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.exceptions.provider import ProviderError
 from app.gpt.base import GPT

@@ -3,7 +3,7 @@
 from fastapi import Request
 from fastapi import FastAPI
 
-from app.enmus.exception import NoteErrorEnum
+from app.enums.exception import NoteErrorEnum
 from app.exceptions.biz_exception import BizException
 from app.exceptions.note import NoteError
 from app.exceptions.provider import ProviderError

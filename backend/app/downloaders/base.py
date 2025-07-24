@@ -3,7 +3,7 @@ import enum
 from abc import ABC, abstractmethod
 from typing import Optional, Union
 
-from app.enmus.note_enums import DownloadQuality
+from app.enums.note_enums import DownloadQuality
 from app.models.notes_model import AudioDownloadResult
 from os import getenv
 QUALITY_MAP = {

@@ -2,7 +2,7 @@
 
 from app.db.model_dao import insert_model, get_all_models, get_model_by_provider_and_name, delete_model
 from app.db.provider_dao import get_enabled_providers
-from app.enmus.exception import ProviderErrorEnum
+from app.enums.exception import ProviderErrorEnum
 from app.exceptions.provider import ProviderError
 from app.gpt.gpt_factory import GPTFactory
 from app.gpt.provider.OpenAI_compatible_provider import OpenAICompatibleProvider

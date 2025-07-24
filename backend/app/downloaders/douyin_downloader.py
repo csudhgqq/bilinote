@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app.downloaders.base import Downloader
 from app.downloaders.douyin_helper.abogus import ABogus
-from app.enmus.note_enums import DownloadQuality
+from app.enums.note_enums import DownloadQuality
 from app.models.audio_model import AudioDownloadResult
 from app.services.cookie_manager import CookieConfigManager
 from app.utils.path_helper import get_data_dir

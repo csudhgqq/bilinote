@@ -11,8 +11,8 @@ from pydantic import BaseModel, validator, field_validator
 from dataclasses import asdict
 
 from app.db.video_task_dao import get_task_by_video
-from app.enmus.exception import NoteErrorEnum
-from app.enmus.note_enums import DownloadQuality
+from app.enums.exception import NoteErrorEnum
+from app.enums.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
 from app.utils.response import ResponseWrapper as R
@@ -21,7 +21,7 @@ from app.validators.video_url_validator import is_supported_video_url
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import StreamingResponse
 import httpx
-from app.enmus.task_status_enums import TaskStatus
+from app.enums.task_status_enums import TaskStatus
 
 # from app.services.downloader import download_raw_audio
 # from app.services.whisperer import transcribe_audio
