@@ -1,0 +1,106 @@
+{
+  "state": {
+    "tasks": [
+      {
+        "id": "test-task-1",
+        "status": "SUCCESS",
+        "platform": "bilibili",
+        "markdown": "# 测试笔记 1\n\n这是一个测试笔记的内容。\n\n## 主要内容\n\n- 这是第一个要点\n- 这是第二个要点\n- 这是第三个要点",
+        "transcript": {
+          "full_text": "这是一个测试的转录文本内容",
+          "language": "zh",
+          "raw": null,
+          "segments": [
+            {
+              "start": 0.0,
+              "end": 5.0,
+              "text": "这是一个测试的"
+            },
+            {
+              "start": 5.0,
+              "end": 10.0,
+              "text": "转录文本内容"
+            }
+          ]
+        },
+        "audioMeta": {
+          "title": "测试视频标题",
+          "cover_url": "https://example.com/cover1.jpg",
+          "duration": 120,
+          "file_path": "/path/to/audio1.mp3",
+          "video_id": "BV1234567890",
+          "platform": "bilibili",
+          "raw_info": {
+            "uploader": "测试UP主",
+            "view_count": 1000
+          }
+        },
+        "createdAt": "2025-01-01T10:00:00.000Z",
+        "formData": {
+          "video_url": "https://www.bilibili.com/video/BV1234567890",
+          "platform": "bilibili",
+          "quality": "medium",
+          "model_name": "DeepSeek-Chat",
+          "provider_id": "deepseek",
+          "link": false,
+          "screenshot": false
+        }
+      },
+      {
+        "id": "test-task-2",
+        "status": "SUCCESS",
+        "platform": "youtube",
+        "markdown": [
+          {
+            "ver_id": "test-task-2-v1",
+            "content": "# YouTube 测试笔记\n\n这是YouTube视频的笔记内容。\n\n## 要点总结\n\n1. 第一个重要观点\n2. 第二个重要观点\n3. 结论",
+            "style": "summary",
+            "model_name": "gpt-4",
+            "created_at": "2025-01-01T11:00:00.000Z"
+          }
+        ],
+        "transcript": {
+          "full_text": "Welcome to this YouTube video. Today we will discuss important topics.",
+          "language": "en",
+          "raw": null,
+          "segments": [
+            {
+              "start": 0.0,
+              "end": 3.0,
+              "text": "Welcome to this YouTube video."
+            },
+            {
+              "start": 3.0,
+              "end": 8.0,
+              "text": "Today we will discuss important topics."
+            }
+          ]
+        },
+        "audioMeta": {
+          "title": "YouTube Test Video",
+          "cover_url": "https://example.com/youtube_cover.jpg",
+          "duration": 300,
+          "file_path": "/path/to/youtube_audio.mp3",
+          "video_id": "dQw4w9WgXcQ",
+          "platform": "youtube",
+          "raw_info": {
+            "uploader": "Test Channel",
+            "view_count": 5000
+          }
+        },
+        "createdAt": "2025-01-01T11:00:00.000Z",
+        "formData": {
+          "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+          "platform": "youtube",
+          "quality": "high",
+          "model_name": "gpt-4",
+          "provider_id": "openai",
+          "link": true,
+          "screenshot": true
+        }
+      }
+    ],
+    "currentTaskId": "test-task-2"
+  },
+  "version": 0
+} 

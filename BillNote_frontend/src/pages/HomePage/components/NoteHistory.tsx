@@ -24,6 +24,9 @@ interface NoteHistoryProps {
 const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
   const tasks = useTaskStore(state => state.tasks)
   const removeTask = useTaskStore(state => state.removeTask)
+  const isLoading = useTaskStore(state => state.isLoading)
+  const isInitialized = useTaskStore(state => state.isInitialized)
+  const refreshHistory = useTaskStore(state => state.refreshHistory)
   const baseURL = import.meta.env.VITE_API_BASE_URL || 'api/'
   const [rawSearch, setRawSearch] = useState('')
   const [search, setSearch] = useState('')
@@ -42,6 +45,16 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
   const filteredTasks = search.trim()
       ? fuse.search(search).map(result => result.item)
       : tasks
+
+  // 显示加载状态
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <div className="text-sm text-neutral-500">正在加载历史记录...</div>
+      </div>
+    )
+  }
+
   if (filteredTasks.length === 0) {
     return (
         <>
@@ -132,14 +145,14 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                     已完成
                   </div>
                 )}
-                {task.status !== 'SUCCESS' && task.status !== 'FAILED' ? (
+                {task.status !== 'SUCCESS' && task.status !== 'FAILD' ? (
                   <div className={'w-10 rounded bg-green-500 p-0.5 text-center text-white'}>
                     等待中
                   </div>
                 ) : (
                   <></>
                 )}
-                {task.status === 'FAILED' && (
+                {task.status === 'FAILD' && (
                   <div className={'w-10 rounded bg-red-500 p-0.5 text-center text-white'}>失败</div>
                 )}
               </div>
@@ -150,7 +163,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                     <TooltipTrigger asChild>
                       <Button
                         type="button"
-                        size="small"
+                        size="sm"
                         variant="ghost"
                         onClick={e => {
                           e.stopPropagation()

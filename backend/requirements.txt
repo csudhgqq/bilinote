@@ -104,6 +104,7 @@ soupsieve==2.7
 starlette==0.46.1
 sympy==1.13.1
 SQLAlchemy==2.0.41
+psycopg2-binary==2.9.12
 tenacity==9.1.2
 tinycss2==1.4.0
 tinyhtml5==2.0.0

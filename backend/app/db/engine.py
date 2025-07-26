@@ -12,6 +12,12 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bili_note.db")
 engine_args = {}
 if DATABASE_URL.startswith("sqlite"):
     engine_args["connect_args"] = {"check_same_thread": False}
+elif DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL 连接池配置
+    engine_args["pool_size"] = 10
+    engine_args["max_overflow"] = 20
+    engine_args["pool_pre_ping"] = True
+    engine_args["pool_recycle"] = 3600
 
 engine = create_engine(
     DATABASE_URL,

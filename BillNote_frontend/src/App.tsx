@@ -15,14 +15,20 @@ import Prompt from '@/pages/SettingPage/Prompt.tsx'
 import AboutPage from '@/pages/SettingPage/about.tsx'
 import Downloader from '@/pages/SettingPage/Downloader.tsx'
 import DownloaderForm from '@/components/Form/DownloaderForm/Form.tsx'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { systemCheck } from '@/services/system.ts'
 import { useCheckBackend } from '@/hooks/useCheckBackend.ts'
 import BackendInitDialog from '@/components/BackendInitDialog'
+import { MigrationModal } from '@/components/MigrationModal'
+import { historyService } from '@/services/history'
+import { useTaskStore } from '@/store/taskStore'
 
 function App() {
   useTaskPolling(3000) // 每 3 秒轮询一次
   const { loading, initialized } = useCheckBackend()
+  const [showMigrationModal, setShowMigrationModal] = useState(false)
+  const [localStorageCount, setLocalStorageCount] = useState(0)
+  const isTaskStoreInitialized = useTaskStore(state => state.isInitialized)
 
   // 在后端初始化完成后执行系统检查
   useEffect(() => {
@@ -30,6 +36,19 @@ function App() {
       systemCheck()
     }
   }, [initialized])
+
+  // 检查是否需要显示迁移模态框
+  useEffect(() => {
+    if (initialized && isTaskStoreInitialized) {
+      const { hasData, count } = historyService.checkLocalStorageData()
+      const hasSkipped = historyService.hasSkippedMigration()
+      
+      if (hasData && !hasSkipped) {
+        setLocalStorageCount(count)
+        setShowMigrationModal(true)
+      }
+    }
+  }, [initialized, isTaskStoreInitialized])
 
   // 如果后端还未初始化，显示初始化对话框
   if (!initialized) {
@@ -63,6 +82,13 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      
+      {/* 迁移模态框 */}
+      <MigrationModal
+        isOpen={showMigrationModal}
+        onClose={() => setShowMigrationModal(false)}
+        localStorageCount={localStorageCount}
+      />
     </>
   )
 }

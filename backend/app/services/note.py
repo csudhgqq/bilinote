@@ -16,6 +16,7 @@ from app.downloaders.douyin_downloader import DouyinDownloader
 from app.downloaders.local_downloader import LocalDownloader
 from app.downloaders.youtube_downloader import YoutubeDownloader
 from app.db.video_task_dao import delete_task_by_video, insert_video_task
+from app.db.history_dao import insert_history, update_history
 from app.enums.exception import NoteErrorEnum, ProviderErrorEnum
 from app.enums.task_status_enums import TaskStatus
 from app.enums.note_enums import DownloadQuality
@@ -122,6 +123,24 @@ class NoteGenerator:
             logger.info(f"开始生成笔记 (task_id={task_id})")
             self._update_status(task_id, TaskStatus.PARSING)
 
+            # 创建历史记录
+            form_data = {
+                "video_url": str(video_url),
+                "platform": platform,
+                "quality": quality.value if hasattr(quality, 'value') else str(quality),
+                "model_name": model_name,
+                "provider_id": provider_id,
+                "link": link,
+                "screenshot": screenshot,
+                "format": _format,
+                "style": style,
+                "extras": extras,
+                "video_understanding": video_understanding,
+                "video_interval": video_interval,
+                "grid_size": grid_size,
+            }
+            self._save_history_record(task_id, "PARSING", platform, form_data=form_data)
+
             # 获取下载器与 GPT 实例
 
             downloader = self._get_downloader(platform)
@@ -182,7 +201,29 @@ class NoteGenerator:
             self._update_status(task_id, TaskStatus.SAVING)
             self._save_metadata(video_id=audio_meta.video_id, platform=platform, task_id=task_id)
 
-            # 6. 完成
+            # 6. 更新历史记录为完成状态，保存最终结果
+            self._update_history_record(
+                task_id=task_id,
+                status="SUCCESS",
+                title=audio_meta.title,
+                cover_url=audio_meta.cover_url,
+                duration=audio_meta.duration,
+                file_path=audio_meta.file_path,
+                video_id=audio_meta.video_id,
+                raw_info=audio_meta.raw_info,
+                transcript_full_text=transcript.full_text,
+                transcript_language=transcript.language,
+                transcript_raw=transcript.raw,
+                transcript_segments=[{
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text
+                } for seg in transcript.segments] if transcript.segments else [],
+                markdown_content=markdown,
+                form_data=form_data  # 传递form_data用于创建markdown版本
+            )
+
+            # 7. 完成
             self._update_status(task_id, TaskStatus.SUCCESS)
             logger.info(f"笔记生成成功 (task_id={task_id})")
             return NoteResult(markdown=markdown, transcript=transcript, audio_meta=audio_meta)
@@ -190,6 +231,9 @@ class NoteGenerator:
         except Exception as exc:
             logger.error(f"生成笔记流程异常 (task_id={task_id})：{exc}", exc_info=True)
             self._update_status(task_id, TaskStatus.FAILED, message=str(exc))
+            # 更新历史记录为失败状态
+            if task_id:
+                self._update_history_record(task_id=task_id, status="FAILED")
             return None
 
     @staticmethod
@@ -577,3 +621,158 @@ class NoteGenerator:
             logger.info(f"已保存任务记录到数据库 (video_id={video_id}, platform={platform}, task_id={task_id})")
         except Exception as e:
             logger.error(f"保存任务记录失败：{e}")
+
+    def _save_history_record(self, task_id: str, status: str, platform: str, **kwargs) -> None:
+        """
+        保存历史记录到数据库
+
+        :param task_id: 任务 ID
+        :param status: 任务状态
+        :param platform: 平台标识
+        :param kwargs: 其他字段
+        """
+        try:
+            # 应用数据适配器，确保数据类型与数据库模型匹配
+            adapted_kwargs = self._adapt_data_for_database(**kwargs)
+            insert_history(
+                task_id=task_id,
+                status=status,
+                platform=platform,
+                **adapted_kwargs
+            )
+            logger.info(f"已保存历史记录到数据库 (task_id={task_id}, status={status})")
+        except Exception as e:
+            logger.error(f"保存历史记录失败：{e}")
+
+    def _update_history_record(self, task_id: str, **kwargs) -> None:
+        """
+        更新历史记录
+
+        :param task_id: 任务 ID
+        :param kwargs: 要更新的字段
+        """
+        try:
+            # 应用数据适配器，确保数据类型与数据库模型匹配
+            adapted_kwargs = self._adapt_data_for_database(**kwargs)
+            update_history(task_id=task_id, **adapted_kwargs)
+            logger.info(f"已更新历史记录 (task_id={task_id})")
+        except Exception as e:
+            logger.error(f"更新历史记录失败：{e}")
+
+    def _adapt_data_for_database(self, **kwargs) -> dict:
+        """
+        数据适配器：将解析后的数据转换为数据库期望的格式
+        
+        :param kwargs: 原始数据字段
+        :return: 适配后的数据字段
+        """
+        import uuid
+        from datetime import datetime
+        import traceback
+        import json
+        
+        logger.info(f"=== 数据适配器开始处理 ===")
+        logger.info(f"输入数据: {json.dumps(kwargs, ensure_ascii=False, default=str)}")
+        
+        adapted_data = {}
+        
+        try:
+            for key, value in kwargs.items():
+                try:
+                    if value is None:
+                        adapted_data[key] = value
+                        continue
+                        
+                    # 处理 duration 字段：float -> int
+                    if key == 'duration' and isinstance(value, float):
+                        logger.info(f"处理 duration 字段: {value} (float) -> {int(round(value))} (int)")
+                        adapted_data[key] = int(round(value))
+                    
+                    # 处理 markdown_content：创建对应的 markdown_versions
+                    elif key == 'markdown_content' and isinstance(value, str) and value.strip():
+                        logger.info(f"处理 markdown_content 字段: 长度 {len(value)} 字符")
+                        adapted_data[key] = value
+                        
+                        # 从kwargs中获取相关信息来创建markdown版本
+                        form_data = kwargs.get('form_data', {})
+                        style = form_data.get('style', 'default') if form_data else 'default'
+                        model_name = form_data.get('model_name', 'unknown') if form_data else 'unknown'
+                        
+                        # 创建markdown版本数据
+                        markdown_version = {
+                            "ver_id": str(uuid.uuid4()),
+                            "content": value,
+                            "style": style,
+                            "model_name": model_name,
+                            "created_at": datetime.now().isoformat()
+                        }
+                        
+                        logger.info(f"创建 markdown 版本: style={style}, model_name={model_name}")
+                        
+                        # 如果没有现有的markdown_versions，创建新的列表
+                        if 'markdown_versions' not in adapted_data:
+                            adapted_data['markdown_versions'] = [markdown_version]
+                    
+                    # 处理 transcript_segments：确保格式正确
+                    elif key == 'transcript_segments' and isinstance(value, list):
+                        logger.info(f"处理 transcript_segments 字段: {len(value)} 个片段")
+                        adapted_segments = []
+                        for i, seg in enumerate(value):
+                            if isinstance(seg, dict):
+                                # 确保时间字段是数字类型
+                                adapted_seg = {
+                                    "start": float(seg.get("start", 0)) if seg.get("start") is not None else 0,
+                                    "end": float(seg.get("end", 0)) if seg.get("end") is not None else 0,
+                                    "text": str(seg.get("text", ""))
+                                }
+                                adapted_segments.append(adapted_seg)
+                            else:
+                                logger.warning(f"跳过无效的转录片段 {i}: {seg}")
+                        adapted_data[key] = adapted_segments
+                    
+                    # 处理 raw_info：确保是 dict 类型
+                    elif key == 'raw_info':
+                        if hasattr(value, '__dict__'):
+                            # 如果是对象，转换为字典
+                            logger.info(f"处理 raw_info 字段: 对象 -> 字典")
+                            adapted_data[key] = value.__dict__
+                        elif isinstance(value, dict):
+                            adapted_data[key] = value
+                        else:
+                            logger.warning(f"raw_info 字段类型无效: {type(value)}, 设为空字典")
+                            adapted_data[key] = {}
+                    
+                    # 其他字段直接传递
+                    else:
+                        adapted_data[key] = value
+                        
+                except Exception as field_error:
+                    logger.error(f"处理字段 {key} 时出错: {field_error}")
+                    logger.error(f"字段值: {value}")
+                    logger.error(f"字段值类型: {type(value)}")
+                    logger.error(traceback.format_exc())
+                    # 字段处理失败时，尝试直接传递原值
+                    adapted_data[key] = value
+            
+            logger.info(f"=== 数据适配器处理完成 ===")
+            logger.info(f"输出数据字段: {list(adapted_data.keys())}")
+            logger.info(f"输出数据摘要:")
+            for k, v in adapted_data.items():
+                if k == 'markdown_content':
+                    logger.info(f"  {k}: {len(v) if v else 0} 字符")
+                elif k == 'markdown_versions':
+                    logger.info(f"  {k}: {len(v) if v else 0} 个版本")
+                elif k == 'transcript_segments':
+                    logger.info(f"  {k}: {len(v) if v else 0} 个片段")
+                else:
+                    logger.info(f"  {k}: {type(v).__name__}")
+            
+            return adapted_data
+            
+        except Exception as e:
+            logger.error(f"=== 数据适配器异常 ===")
+            logger.error(f"异常类型: {type(e).__name__}")
+            logger.error(f"异常消息: {str(e)}")
+            logger.error(f"完整堆栈:\n{traceback.format_exc()}")
+            logger.error(f"=== 数据适配器异常结束 ===")
+            raise

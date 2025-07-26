@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd() + '/../')
 
   const apiBaseUrl = env.VITE_API_BASE_URL || 'http://localhost:8000'
-  const port = env.VITE_FRONTEND_PORT || 3015
+  const port = Number(env.VITE_FRONTEND_PORT) || 3015
 
   return {
     base: './',
@@ -25,12 +25,11 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiBaseUrl,
           changeOrigin: true,
-          rewrite: path => path.replace(/^\/api/, '/api'),
+          // 不需要重写，直接转发到后端的/api路径
         },
         '/static': {
           target: apiBaseUrl,
           changeOrigin: true,
-          rewrite: path => path.replace(/^\/static/, '/static'),
         },
       },
     },

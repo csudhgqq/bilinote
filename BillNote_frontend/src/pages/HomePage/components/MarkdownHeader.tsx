@@ -1,22 +1,50 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Download, BrainCircuit } from 'lucide-react'
+import { Copy, Download, BrainCircuit, Database } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
-
-interface VersionNote {
-  ver_id: string
-  model_name?: string
-  style?: string
-  created_at?: string
-}
+import { toast } from 'react-hot-toast'
+import type { Markdown, TaskStatus } from '@/store/taskStore'
 
 interface NoteHeaderProps {
   currentTask?: {
-    markdown: VersionNote[] | string
+    id: string
+    markdown: Markdown[] | string
+    audioMeta: {
+      title: string
+      cover_url: string
+      duration: number
+      file_path: string
+      video_id: string
+      platform: string
+      raw_info: Record<string, unknown>
+    }
+    transcript: {
+      full_text: string
+      language: string
+      raw: Record<string, unknown>
+      segments: Array<{
+        start: number
+        end: number
+        text: string
+      }>
+    }
+    status: TaskStatus
+    platform: string
+    formData: {
+      video_url: string
+      link: boolean | undefined
+      screenshot: boolean | undefined
+      platform: string
+      quality: string
+      model_name: string
+      provider_id: string
+      style?: string | undefined
+    }
+    createdAt: string
   }
   isMultiVersion: boolean
   currentVerId: string
@@ -27,7 +55,10 @@ interface NoteHeaderProps {
   onCopy: () => void
   onDownload: () => void
   createAt?: string | Date
+  showTranscribe: boolean
   setShowTranscribe: (show: boolean) => void
+  viewMode: 'preview' | 'map'
+  setViewMode: (mode: 'preview' | 'map') => void
 }
 
 export function MarkdownHeader({
@@ -47,6 +78,7 @@ export function MarkdownHeader({
   setViewMode,
 }: NoteHeaderProps) {
   const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let timer: NodeJS.Timeout
@@ -63,8 +95,9 @@ export function MarkdownHeader({
 
   const styleName = noteStyles.find(v => v.value === style)?.label || style
 
-  const reversedMarkdown: VersionNote[] = Array.isArray(currentTask?.markdown)
-    ? [...currentTask!.markdown].reverse()
+  // 确保markdown是数组类型
+  const markdownVersions: Markdown[] = Array.isArray(currentTask?.markdown)
+    ? currentTask.markdown
     : []
 
   const formatDate = (date: string | Date | undefined) => {
@@ -82,23 +115,54 @@ export function MarkdownHeader({
       .replace(/\//g, '-')
   }
 
+  const handleSaveToDatabase = async () => {
+    if (!currentTask) {
+      toast.error('没有可保存的任务数据')
+      return
+    }
+
+    setSaving(true)
+    try {
+      // 动态导入historyService，避免循环依赖
+      const { historyService } = await import('@/services/history')
+      
+      // 检查记录是否已存在
+      const existingRecord = await historyService.getHistoryByTaskId(currentTask.id)
+      
+      // 保存到数据库
+      await historyService.saveTaskToDatabase(currentTask)
+      
+      if (existingRecord) {
+        toast.success('记录已覆盖更新到数据库!')
+      } else {
+        toast.success('记录已保存到数据库!')
+      }
+    } catch (error: unknown) {
+      console.error('保存到数据库失败:', error)
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      toast.error(`保存失败: ${errorMessage}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-2 backdrop-blur-sm">
       {/* 左侧区域：版本 + 标签 + 创建时间 */}
       <div className="flex flex-wrap items-center gap-3">
-        {isMultiVersion && (
+        {isMultiVersion && markdownVersions.length > 0 && (
           <Select value={currentVerId} onValueChange={setCurrentVerId}>
             <SelectTrigger className="h-8 w-[160px] text-sm">
               <div className="flex items-center">
                 {(() => {
-                  const idx = currentTask?.markdown.findIndex(v => v.ver_id === currentVerId)
+                  const idx = markdownVersions.findIndex(v => v.ver_id === currentVerId)
                   return idx !== -1 ? `版本（${currentVerId.slice(-6)}）` : ''
                 })()}
               </div>
             </SelectTrigger>
 
             <SelectContent>
-              {(currentTask?.markdown || []).map((v, idx) => {
+              {markdownVersions.map((v) => {
                 const shortId = v.ver_id.slice(-6)
                 return (
                   <SelectItem key={v.ver_id} value={v.ver_id}>
@@ -129,19 +193,20 @@ export function MarkdownHeader({
             <TooltipTrigger asChild>
               <Button
                 onClick={() => {
-                  setViewMode(viewMode == 'preview' ? 'map' : 'preview')
+                  setViewMode(viewMode === 'preview' ? 'map' : 'preview')
                 }}
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2"
               >
                 <BrainCircuit className="mr-1.5 h-4 w-4" />
-                <span className="text-sm">{viewMode == 'preview' ? '思维导图' : 'markdown'}</span>
+                <span className="text-sm">{viewMode === 'preview' ? '思维导图' : 'markdown'}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>思维导图</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -165,6 +230,25 @@ export function MarkdownHeader({
             <TooltipContent>下载为 Markdown 文件</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleSaveToDatabase}
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                disabled={saving || !currentTask}
+              >
+                <Database className="mr-1.5 h-4 w-4" />
+                <span className="text-sm">{saving ? '保存中...' : '保存数据库'}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>将当前笔记保存到数据库</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -176,7 +260,6 @@ export function MarkdownHeader({
                 size="sm"
                 className="h-8 px-2"
               >
-                {/*<Download className="mr-1.5 h-4 w-4" />*/}
                 <span className="text-sm">原文参照</span>
               </Button>
             </TooltipTrigger>
