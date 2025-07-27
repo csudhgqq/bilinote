@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, func, JSON
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String, Text, DateTime, func, JSON, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
 
 from app.db.engine import Base
 
@@ -11,6 +11,7 @@ class History(Base):
     task_id = Column(String, unique=True, nullable=False)
     status = Column(String, nullable=False)  # PENDING, RUNNING, SUCCESS, FAILED
     platform = Column(String, nullable=False)
+    folder_id = Column(String, ForeignKey('folders.id'), nullable=True)  # 所属文件夹ID，NULL表示根目录
     
     # 音频元数据
     title = Column(String)
@@ -35,4 +36,7 @@ class History(Base):
     
     # 时间戳
     created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now()) 
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 关系
+    folder = relationship("Folder") 

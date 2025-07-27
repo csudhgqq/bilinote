@@ -21,6 +21,7 @@ class HistoryResponse(BaseModel):
     task_id: str
     status: str
     platform: str
+    folder_id: Optional[str] = None
     title: Optional[str] = None
     cover_url: Optional[str] = None
     duration: Optional[int] = None
@@ -53,6 +54,7 @@ def get_history_list(
                 "task_id": history.task_id,
                 "status": history.status,
                 "platform": history.platform,
+                "folder_id": history.folder_id,
                 "title": history.title,
                 "cover_url": history.cover_url,
                 "duration": history.duration,
@@ -201,6 +203,7 @@ def get_history_detail(task_id: str):
             "task_id": history.task_id,
             "status": history.status,
             "platform": history.platform,
+            "folder_id": history.folder_id,
             "title": history.title,
             "cover_url": history.cover_url,
             "duration": history.duration,

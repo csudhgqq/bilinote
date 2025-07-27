@@ -23,7 +23,8 @@ def insert_history(
     transcript_segments: Optional[List] = None,
     markdown_content: Optional[str] = None,
     markdown_versions: Optional[List] = None,
-    form_data: Optional[Dict] = None
+    form_data: Optional[Dict] = None,
+    folder_id: Optional[str] = None
 ) -> Optional[History]:
     """插入新的历史记录"""
     db = next(get_db())
@@ -44,7 +45,8 @@ def insert_history(
             transcript_segments=transcript_segments,
             markdown_content=markdown_content,
             markdown_versions=markdown_versions,
-            form_data=form_data
+            form_data=form_data,
+            folder_id=folder_id
         )
         db.add(history)
         db.commit()
@@ -157,5 +159,34 @@ def get_history_by_video(video_id: str, platform: str) -> List[History]:
     except Exception as e:
         logger.error(f"Failed to get history by video: {e}")
         return []
+    finally:
+        db.close()
+
+
+def move_history_to_folder(task_id: str, folder_id: Optional[str]) -> bool:
+    """将历史记录移动到指定文件夹"""
+    db = next(get_db())
+    try:
+        history = db.query(History).filter_by(task_id=task_id).first()
+        if not history:
+            logger.warning(f"History record not found for task_id: {task_id}")
+            return False
+        
+        # 如果指定了文件夹ID，检查文件夹是否存在
+        if folder_id is not None:
+            from app.db.models.folder import Folder
+            folder = db.query(Folder).filter_by(id=folder_id).first()
+            if not folder:
+                logger.warning(f"Folder not found for folder_id: {folder_id}")
+                return False
+        
+        history.folder_id = folder_id
+        db.commit()
+        logger.info(f"History moved to folder successfully. task_id: {task_id}, folder_id: {folder_id}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to move history to folder: {e}")
+        return False
     finally:
         db.close() 

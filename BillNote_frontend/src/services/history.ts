@@ -7,6 +7,7 @@ export interface HistoryRecord {
   task_id: string
   status: string
   platform: string
+  folder_id?: string
   title?: string
   cover_url?: string
   duration?: number
@@ -67,6 +68,7 @@ export function convertHistoryToTask(history: HistoryRecord): Task {
     id: history.task_id,
     status: history.status as TaskStatus,
     platform: history.platform,
+    folderId: history.folder_id,
     markdown: markdown,
     transcript: {
       full_text: history.transcript_full_text || '',
@@ -113,6 +115,7 @@ export function convertTaskToHistory(task: Task): Partial<HistoryRecord> {
     task_id: task.id,
     status: task.status,
     platform: task.platform,
+    folder_id: task.folderId,
     title: task.audioMeta.title,
     cover_url: task.audioMeta.cover_url,
     duration: task.audioMeta.duration,

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { delete_task, generateNote } from '@/services/note.ts'
 import { historyService } from '@/services/history.ts'
+import { folderService } from '@/services/folder.ts'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
 
@@ -45,6 +46,7 @@ export interface Task {
   audioMeta: AudioMeta
   platform: string
   createdAt: string
+  folderId?: string // 新增：所属文件夹ID，undefined表示根目录
   formData: {
     video_url: string
     link: undefined | boolean
@@ -57,8 +59,17 @@ export interface Task {
   }
 }
 
+export interface Folder {
+  id: string
+  name: string
+  parentId?: string // undefined表示根目录下的文件夹
+  createdAt: string
+  isExpanded: boolean // 是否展开
+}
+
 interface TaskStore {
   tasks: Task[]
+  folders: Folder[]
   currentTaskId: string | null
   isLoading: boolean
   isInitialized: boolean
@@ -75,13 +86,22 @@ interface TaskStore {
   getCurrentTask: () => Task | null
   retryTask: (id: string, payload?: any) => Promise<void>
   
+  // 文件夹管理方法
+  addFolder: (name: string, parentId?: string) => void
+  removeFolder: (id: string) => void
+  renameFolder: (id: string, name: string) => void
+  toggleFolder: (id: string) => void
+  moveTaskToFolder: (taskId: string, folderId?: string) => void
+  
   // 数据库操作方法
   loadHistoryFromDatabase: () => Promise<void>
+  loadFoldersFromDatabase: () => Promise<void>
   refreshHistory: () => Promise<void>
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
+  folders: [],
   currentTaskId: null,
   isLoading: false,
   isInitialized: false,
@@ -94,13 +114,16 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ isLoading: true })
     
     try {
-      // 从数据库加载历史记录
-      await state.loadHistoryFromDatabase()
+      // 从数据库加载历史记录和文件夹
+      await Promise.all([
+        state.loadHistoryFromDatabase(),
+        state.loadFoldersFromDatabase()
+      ])
       
       set({ isInitialized: true })
     } catch (error) {
       console.error('初始化taskStore失败:', error)
-      toast.error('加载历史记录失败')
+      toast.error('加载数据失败')
     } finally {
       set({ isLoading: false })
     }
@@ -117,10 +140,24 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
+  // 从数据库加载文件夹
+  loadFoldersFromDatabase: async () => {
+    try {
+      const folders = await folderService.getAllFolders()
+      set({ folders })
+    } catch (error) {
+      console.error('从数据库加载文件夹失败:', error)
+      toast.error('加载文件夹失败')
+    }
+  },
+
   // 刷新历史记录
   refreshHistory: async () => {
     const state = get()
-    await state.loadHistoryFromDatabase()
+    await Promise.all([
+      state.loadHistoryFromDatabase(),
+      state.loadFoldersFromDatabase()
+    ])
   },
 
   addPendingTask: (taskId: string, platform: string, formData: any) => {
@@ -268,6 +305,148 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   clearTasks: () => set({ tasks: [], currentTaskId: null }),
 
   setCurrentTask: (taskId: string | null) => set({ currentTaskId: taskId }),
+
+  // 文件夹管理方法实现
+  addFolder: async (name: string, parentId?: string) => {
+    const newFolder: Folder = {
+      id: uuidv4(),
+      name,
+      parentId,
+      createdAt: new Date().toISOString(),
+      isExpanded: true,
+    }
+    
+    // 立即更新本地状态
+    set(state => ({
+      folders: [...state.folders, newFolder]
+    }))
+    
+    // 同步到数据库
+    try {
+      await folderService.createFolder(newFolder)
+    } catch (error) {
+      // 如果保存失败，回滚本地状态
+      console.error('保存文件夹到数据库失败:', error)
+      set(state => ({
+        folders: state.folders.filter(f => f.id !== newFolder.id)
+      }))
+      toast.error('创建文件夹失败')
+    }
+  },
+
+  removeFolder: async (id: string) => {
+    // 先保存当前状态，以便可能的回滚
+    const currentState = get()
+    
+    // 立即更新本地状态
+    set(state => {
+      // 先将该文件夹中的任务移动到根目录
+      const updatedTasks = state.tasks.map(task => 
+        task.folderId === id ? { ...task, folderId: undefined } : task
+      )
+      
+      // 递归删除子文件夹并移动其中的任务
+      const getSubfolderIds = (folderId: string): string[] => {
+        const subfolders = state.folders.filter(f => f.parentId === folderId)
+        return [folderId, ...subfolders.flatMap(sf => getSubfolderIds(sf.id))]
+      }
+      
+      const folderIdsToDelete = getSubfolderIds(id)
+      const finalTasks = updatedTasks.map(task =>
+        folderIdsToDelete.includes(task.folderId || '') ? { ...task, folderId: undefined } : task
+      )
+      
+      return {
+        folders: state.folders.filter(folder => !folderIdsToDelete.includes(folder.id)),
+        tasks: finalTasks
+      }
+    })
+    
+    // 同步到数据库
+    try {
+      await folderService.deleteFolder(id)
+    } catch (error) {
+      // 如果删除失败，回滚本地状态
+      console.error('删除文件夹失败:', error)
+      set({ 
+        folders: currentState.folders,
+        tasks: currentState.tasks 
+      })
+      toast.error('删除文件夹失败')
+    }
+  },
+
+  renameFolder: async (id: string, name: string) => {
+    // 先保存当前状态
+    const currentState = get()
+    
+    // 立即更新本地状态
+    set(state => ({
+      folders: state.folders.map(folder =>
+        folder.id === id ? { ...folder, name } : folder
+      )
+    }))
+    
+    // 同步到数据库
+    try {
+      await folderService.renameFolder(id, name)
+    } catch (error) {
+      // 如果更新失败，回滚本地状态
+      console.error('重命名文件夹失败:', error)
+      set({ folders: currentState.folders })
+      toast.error('重命名文件夹失败')
+    }
+  },
+
+  toggleFolder: async (id: string) => {
+    // 先保存当前状态
+    const currentState = get()
+    
+    // 获取目标文件夹的当前展开状态
+    const targetFolder = currentState.folders.find(f => f.id === id)
+    if (!targetFolder) return
+    
+    const newExpandedState = !targetFolder.isExpanded
+    
+    // 立即更新本地状态
+    set(state => ({
+      folders: state.folders.map(folder =>
+        folder.id === id ? { ...folder, isExpanded: newExpandedState } : folder
+      )
+    }))
+    
+    // 同步到数据库
+    try {
+      await folderService.toggleFolder(id, newExpandedState)
+    } catch (error) {
+      // 如果更新失败，回滚本地状态
+      console.error('切换文件夹状态失败:', error)
+      set({ folders: currentState.folders })
+      toast.error('更新文件夹状态失败')
+    }
+  },
+
+  moveTaskToFolder: async (taskId: string, folderId?: string) => {
+    // 先保存当前状态
+    const currentState = get()
+    
+    // 立即更新本地状态
+    set(state => ({
+      tasks: state.tasks.map(task =>
+        task.id === taskId ? { ...task, folderId } : task
+      )
+    }))
+    
+    // 同步到数据库
+    try {
+      await folderService.moveHistoryToFolder(taskId, folderId)
+    } catch (error) {
+      // 如果移动失败，回滚本地状态
+      console.error('移动任务到文件夹失败:', error)
+      set({ tasks: currentState.tasks })
+      toast.error('移动任务失败')
+    }
+  },
 }))
 
 // 在应用启动时自动初始化
